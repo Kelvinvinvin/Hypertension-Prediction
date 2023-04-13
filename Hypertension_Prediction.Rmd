@@ -1,0 +1,1089 @@
+---
+title: "AML_assignment"
+author: "Lai Zhi Ming"
+date: "1/9/2023"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Importing the package 
+```{r}
+library(dplyr)
+library(DataExplorer)
+library(missForest)
+library(ROCR)
+library(caret)
+library(caTools)
+library(randomForest)
+library(glmnet)
+library(Matrix)
+library(psych)
+library(ggplot2)
+library(e1071)
+library(vcd)
+library(corrplot)
+library(ggpubr)
+library(faraway)
+library(GGally)
+library(ellipse)
+library(pROC)
+library(xgboost)
+library(psych)
+library(qwraps2)
+library(tidyverse)
+
+```
+
+Read the dataset from the directory set
+```{r}
+#dataset source: https://www.kaggle.com/datasets/prosperchuks/health-dataset
+hypertension_dt <- read.csv('hypertension_data.csv',header = TRUE)
+```
+
+/---------------       Exploratory Data Analysis------------------------/
+```{r}
+View(hypertension_dt)
+
+summary(hypertension_dt)
+
+glimpse(hypertension_dt)
+
+```
+
+show total observation and features
+```{r}
+plot_str(hypertension_dt)
+```
+
+Data conversion
+```{r}
+hypertension_dt$sex <-as.factor(hypertension_dt$sex)
+hypertension_dt$fbs <-as.factor(hypertension_dt$fbs)
+hypertension_dt$cp <-as.factor(hypertension_dt$cp)
+hypertension_dt$restecg <-as.factor(hypertension_dt$restecg)
+hypertension_dt$exang <-as.factor(hypertension_dt$exang)
+hypertension_dt$slope <-as.factor(hypertension_dt$slope)
+hypertension_dt$ca <-as.factor(hypertension_dt$ca)
+hypertension_dt$thal <-as.factor(hypertension_dt$thal)
+hypertension_dt$target <-as.factor(hypertension_dt$target)
+```
+
+
+Data pre-processing
+```{r}
+#viewing any missing data
+plot_missing(hypertension_dt)
+sum(is.na(hypertension_dt))
+colSums(sapply(hypertension_dt,is.na)) 
+which (is.na(hypertension_dt$sex))
+```
+
+Display NA rows
+```{r}
+na_rows <- hypertension_dt[!complete.cases(hypertension_dt), ]
+na_rows
+```
+
+
+Statistical Analysis
+Categorical data
+sex
+```{r}
+table(hypertension_dt$sex)
+
+hypertension_dt %>% 
+  group_by(sex) %>% summarise(Frequency =n(), Percentage = round(n()/nrow(.)*100,2)) %>%
+  arrange(desc(Frequency))
+
+```
+
+cp
+```{r}
+table(hypertension_dt$cp)
+
+hypertension_dt %>% 
+  group_by(cp) %>% summarise(Frequency =n(), Percentage = round(n()/nrow(.)*100,2)) %>%
+  arrange(desc(Frequency))
+```
+
+fbs
+```{r}
+table(hypertension_dt$fbs)
+
+hypertension_dt %>% 
+  group_by(fbs) %>% summarise(Frequency =n(), Percentage = round(n()/nrow(.)*100,2)) %>%
+  arrange(desc(Frequency))
+```
+
+restecg
+```{r}
+table(hypertension_dt$restecg)
+
+hypertension_dt %>% 
+  group_by(restecg) %>% summarise(Frequency =n(), Percentage = round(n()/nrow(.)*100,2)) %>%
+  arrange(desc(Frequency))
+```
+
+exang
+```{r}
+table(hypertension_dt$exang)
+
+hypertension_dt %>% 
+  group_by(exang) %>% summarise(Frequency =n(), Percentage = round(n()/nrow(.)*100,2)) %>%
+  arrange(desc(Frequency))
+```
+
+slope
+```{r}
+table(hypertension_dt$slope)
+
+hypertension_dt %>% 
+  group_by(slope) %>% summarise(Frequency =n(), Percentage = round(n()/nrow(.)*100,2)) %>%
+  arrange(desc(Frequency))
+```
+
+ca
+```{r}
+table(hypertension_dt$ca)
+
+hypertension_dt %>% 
+  group_by(ca) %>% summarise(Frequency =n(), Percentage = round(n()/nrow(.)*100,2)) %>%
+  arrange(desc(Frequency))
+```
+
+thal
+```{r}
+table(hypertension_dt$thal)
+
+hypertension_dt %>% 
+  group_by(thal) %>% summarise(Frequency =n(), Percentage = round(n()/nrow(.)*100,2)) %>%
+  arrange(desc(Frequency))
+```
+
+target
+```{r}
+table(hypertension_dt$target)
+
+hypertension_dt %>% 
+  group_by(target) %>% summarise(Frequency =n(), Percentage = round(n()/nrow(.)*100,2)) %>%
+  arrange(desc(Frequency))
+```
+
+
+/******* continuous data ********/
+```{r}
+describe(hypertension_dt[ , c('age', 'trestbps','chol','thalach','oldpeak')])
+
+
+```
+
+/-----------------------------------------------------/
+
+
+
+box plot for continuous data + outlier detection --------------/ source: https://statsandr.com/blog/outliers-detection-in-r/
+Age
+```{r}
+out <- boxplot.stats(hypertension_dt$age)$out
+out
+boxplot(hypertension_dt$age,
+  ylab = "age",
+  main = "Boxplot of age"
+)
+mtext(paste("Outliers: ", paste(out, collapse = ", ")))
+```
+
+trestbps
+```{r}
+out <- boxplot.stats(hypertension_dt$trestbps)$out
+out
+boxplot(hypertension_dt$trestbps,
+  ylab = "trestbps",
+  main = "Boxplot of trestbps"
+)
+mtext(paste("Outliers: ", paste(out, collapse = ", ")))
+```
+
+chol
+```{r}
+out <- boxplot.stats(hypertension_dt$chol)$out
+out
+boxplot(hypertension_dt$chol,
+  ylab = "chol",
+  main = "Boxplot of chol"
+)
+mtext(paste("Outliers: ", paste(out, collapse = ", ")))
+```
+
+thalach
+```{r}
+out <- boxplot.stats(hypertension_dt$thalach)$out
+out
+boxplot(hypertension_dt$thalach,
+  ylab = "thalach",
+  main = "Boxplot of thalach"
+)
+mtext(paste("Outliers: ", paste(out, collapse = ", ")))
+```
+
+oldpeak
+```{r}
+out <- boxplot.stats(hypertension_dt$oldpeak)$out
+out
+boxplot(hypertension_dt$oldpeak,
+  ylab = "oldpeak",
+  main = "Boxplot of oldpeak"
+)
+mtext(paste("Outliers: ", paste(out, collapse = ", ")))
+```
+
+
+/------------------------End of EDA-------------------------------/
+
+
+/------------------------- Data preprocessing ------------------/
+### Imputation Using missForest
+
+```{r}
+# Imputing missing values using missForest
+
+# imputed_hypertension_dt <- mice(hypertension_dt, m=3)
+# Final_imputed_hypertension_dt <- complete (imputed_hypertension_dt)
+# View (Final_imputed_hypertension_dt)
+imputed_hypertension_dt <- missForest(hypertension_dt, verbose = TRUE)
+
+
+```
+
+Check whether still contain any NA value in data frames
+```{r}
+anyNA.data.frame(imputed_hypertension_dt)
+imputed_hypertension_dt$ximp$sex[2]
+
+#To call imputed dataset
+complete_dt <- imputed_hypertension_dt$ximp
+View(complete_dt)
+plot_missing(complete_dt)
+```
+
+data normalization (log transformation)
+```{r}
+complete_dt$age <- log(complete_dt$age)
+complete_dt$trestbps <- log(complete_dt$trestbps)
+complete_dt$chol <- log(complete_dt$chol)
+complete_dt$thalach <- log(complete_dt$thalach)
+```
+
+one hot encoding
+```{r}
+dmy <- dummyVars(" ~ ca+cp+restecg+slope+thal", data = complete_dt)
+new_complete_dt <- data.frame(predict(dmy, newdata = complete_dt))
+
+new_complete_dt_remove_five <- subset(complete_dt, select = -c(ca, cp, restecg,slope,thal))
+
+new_complete_dt <- cbind(new_complete_dt,new_complete_dt_remove_five)
+new_complete_dt
+
+```
+
+```{r}
+plot_missing(new_complete_dt)
+names(new_complete_dt)[names(new_complete_dt) == "complete_dt$target"] <- "target"
+```
+
+Rename column
+```{r}
+names(new_complete_dt) <- c("ca_0",
+               "ca_1",
+               "ca_2",
+               "ca_3",
+               "ca_4",
+               "cp_0",
+               "cp_1",
+               "cp_2",
+               "cp_3",
+               "restecg_0",
+               "restecg_1",
+               "restecg_2",
+               "slope_0",
+               "slope_1",
+               "slope_2",
+               "thal_0",
+               "thal_1",
+               "thal_2",
+               "thal_3",
+               "age",
+               "sex",
+               "trestbps",
+               "chol",
+               "fbs",
+               "thalach",
+               "exang",
+               "oldpeak",
+               "target")
+
+glimpse(new_complete_dt)
+```
+
+data type conversion'
+```{r}
+new_complete_dt$ca_0 <- as.factor(new_complete_dt$ca_0)
+new_complete_dt$ca_1 <- as.factor(new_complete_dt$ca_1)
+new_complete_dt$ca_2 <- as.factor(new_complete_dt$ca_2)
+new_complete_dt$ca_3 <- as.factor(new_complete_dt$ca_3)
+new_complete_dt$ca_4 <- as.factor(new_complete_dt$ca_4)
+new_complete_dt$cp_0 <- as.factor(new_complete_dt$cp_0)
+new_complete_dt$cp_1 <- as.factor(new_complete_dt$cp_1)
+new_complete_dt$cp_2 <- as.factor(new_complete_dt$cp_2)
+new_complete_dt$cp_3 <- as.factor(new_complete_dt$cp_3)
+new_complete_dt$restecg_0 <- as.factor(new_complete_dt$restecg_0)
+new_complete_dt$restecg_1 <- as.factor(new_complete_dt$restecg_1)
+new_complete_dt$restecg_2 <- as.factor(new_complete_dt$restecg_2)
+new_complete_dt$slope_0 <- as.factor(new_complete_dt$slope_0)
+new_complete_dt$slope_1 <- as.factor(new_complete_dt$slope_1)
+new_complete_dt$slope_2 <- as.factor(new_complete_dt$slope_2)
+new_complete_dt$thal_0 <- as.factor(new_complete_dt$thal_0)
+new_complete_dt$thal_1 <- as.factor(new_complete_dt$thal_1)
+new_complete_dt$thal_2 <- as.factor(new_complete_dt$thal_2)
+new_complete_dt$thal_3 <- as.factor(new_complete_dt$thal_3)
+
+glimpse(new_complete_dt)
+```
+
+Check correlation after imputation
+```{r}
+
+# calculate correlation matrix
+correlationMatrix <- cor(new_complete_dt[, unlist(lapply(new_complete_dt, is.numeric))])
+# summarize the correlation matrix
+print(correlationMatrix)
+
+```
+
+
+has multicolinearity issue so we need to check colinear for each variable *source: https://www.statology.org/perfect-multicollinearity/
+```{r}
+model_multicolinearity <- lm(as.numeric(target)~., data=new_complete_dt)
+model_multicolinearity
+
+summary(model_multicolinearity)
+```
+
+
+/--------------------------------- end of preprocessing -------------------------------/
+
+
+/--------------------------- Visualization after preprocessing------------------------/
+Histogram -----------------------------------------------/
+```{r}
+par(mfrow=c(3,3))
+hist(new_complete_dt$age)
+hist(new_complete_dt$trestbps)
+hist(new_complete_dt$chol)
+hist(new_complete_dt$thalach)
+hist(new_complete_dt$oldpeak)
+```
+
+Barplot ------------------------------------------------/
+```{r}
+par(mfrow=c(3,3))
+
+#cp_0
+barplot(table(new_complete_dt$cp_0),
+main="cp_0 Count",
+xlab="cp_0",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#cp_1
+barplot(table(new_complete_dt$cp_1),
+main="cp_1 Count",
+xlab="cp_1",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#cp_2
+barplot(table(new_complete_dt$cp_2),
+main="cp_2 Count",
+xlab="cp_2",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#cp_3
+barplot(table(new_complete_dt$cp_3),
+main="cp_3 Count",
+xlab="cp_3",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#ca_0
+barplot(table(new_complete_dt$ca_0),
+main="ca_0 Count",
+xlab="ca_0",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#ca_1
+barplot(table(new_complete_dt$ca_1),
+main="ca_1 Count",
+xlab="ca_1",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#ca_2
+barplot(table(new_complete_dt$ca_2),
+main="ca_2 Count",
+xlab="ca_2",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#ca_3
+barplot(table(new_complete_dt$ca_3),
+main="ca_3 Count",
+xlab="ca_3",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#ca_4
+barplot(table(new_complete_dt$ca_4),
+main="ca_4 Count",
+xlab="ca_4",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#restecg_0
+barplot(table(new_complete_dt$restecg_0),
+main="restecg_0 Count",
+xlab="restecg_0",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#restecg_1
+barplot(table(new_complete_dt$restecg_1),
+main="restecg_1 Count",
+xlab="restecg_1",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#restecg_2
+barplot(table(new_complete_dt$restecg_2),
+main="restecg_2 Count",
+xlab="restecg_2",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#slope_0
+barplot(table(new_complete_dt$slope_0),
+main="slope_0 Count",
+xlab="slope_0",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#slope_1
+barplot(table(new_complete_dt$slope_1),
+main="slope_1 Count",
+xlab="slope_1",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#slope_2
+barplot(table(new_complete_dt$slope_2),
+main="slope_2 Count",
+xlab="slope_2",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#thal_0
+barplot(table(new_complete_dt$thal_0),
+main="thal_0 Count",
+xlab="thal_0",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#thal_1
+barplot(table(new_complete_dt$thal_1),
+main="thal_1 Count",
+xlab="thal_1",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#thal_2
+barplot(table(new_complete_dt$thal_2),
+main="thal_2 Count",
+xlab="thal_2",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+#sex
+barplot(table(new_complete_dt$sex),
+main="Gender Count",
+xlab="Gender",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+
+#fbs
+barplot(table(new_complete_dt$fbs),
+main="fbs Count",
+xlab="fbs",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+
+#exang
+barplot(table(new_complete_dt$exang),
+main="exang Count",
+xlab="exang",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+
+#target
+barplot(table(new_complete_dt$target),
+main="target Count",
+xlab="target",
+ylab="Count",
+border="red",
+col="blue"
+)
+
+```
+
+
+```{r}
+character_new_complete_dt <- lapply(new_complete_dt,as.character)
+numeric_new_complete_dt <- lapply(character_new_complete_dt,as.numeric)
+numeric_new_complete_dt <- data.frame(numeric_new_complete_dt)
+
+```
+
+correlation matrix * source:https://statsandr.com/blog/correlation-coefficient-and-correlation-test-in-r/
+```{r}
+corrplot(cor(numeric_new_complete_dt),
+  method = "number",
+  type = "upper" # show only upper side
+)
+
+#ggpairs(numeric_new_complete_dt[, 1:28])
+```
+
+heatmap
+```{r}
+plot_correlation(numeric_new_complete_dt)
+```
+
+
+rank importance features
+source: https://jtr13.github.io/cc21fall2/feature-selection-in-r.html
+```{r}
+#use roc_curve area as score
+roc_imp <- filterVarImp(x = new_complete_dt[,1:27], y = new_complete_dt$target)
+
+#sort the score in decreasing order
+roc_imp <- data.frame(cbind(variable = rownames(roc_imp), score = roc_imp[,1]))
+roc_imp$score <- as.double(roc_imp$score)
+roc_imp[order(roc_imp$score,decreasing = TRUE),]
+```
+
+/--------------------------------------end of visualization -------------------------/
+
+dataset splitting
+```{r}
+library(caret)
+library(caTools)
+set.seed(123)
+split = sample.split(new_complete_dt$target, SplitRatio = 0.7)
+training_set = subset(new_complete_dt, split == TRUE)
+test_set = subset(new_complete_dt, split == FALSE)
+
+str(training_set)
+str(test_set)
+```
+
+```{r}
+table(training_set$target)
+prop.table(table(training_set$target))
+
+
+table(test_set$target)
+prop.table(table(test_set$target))
+```
+
+
+/---------------------------------------------------------------/
+cross validation
+```{r}
+
+custom <- trainControl(method = "repeatedcv",
+                       number = 10,
+                       repeats = 5,
+                       search = "random",
+                       verboseIter = T)
+
+```
+
+
+/---------------------------------------------------------------/
+
+
+apply lr baseline model
+```{r}
+set.seed(1234)
+classifier_lr = glm(target ~.,
+                 training_set,
+                 family = binomial)
+summary(classifier_lr)
+```
+
+```{r}
+print(classifier_lr)
+```
+
+
+predicting in training set no tuning
+```{r}
+pred_prob_training <- predict(classifier_lr, type = 'response', training_set[ ,-28] )
+pred_class_training = ifelse(pred_prob_training > 0.5, 1, 0)
+cbind(pred_prob_training, pred_class_training)
+cm_training = table(training_set$target, pred_class_training)
+cm_training
+
+```
+
+confusion matrix in training set no tuning
+```{r}
+confusionMatrix(cm_training, mode = "everything")
+```
+
+
+predicting in test set no tuning
+```{r}
+pred_prob_test <- predict(classifier_lr, type = 'response', test_set )
+pred_class_test = ifelse(pred_prob_test > 0.5, 1, 0)
+cbind(pred_prob_test, pred_class_test)
+cm_test_lr = table(test_set$target, pred_class_test)
+cm_test_lr
+```
+
+confusion matrix in test set no tuning
+```{r}
+confusionMatrix(cm_test_lr,mode = "everything")
+```
+
+confusion matrix for baseline
+```{r}
+confusionMatrix(cm_test, mode="everything")
+```
+
+ROC for baseline
+```{r}
+pred_lr_baseline = prediction(pred_prob_test, test_set$target)
+perf_lr_baseline = performance(pred_lr_baseline, "tpr", "fpr")
+pred_lr_baseline
+perf_lr_baseline
+plot(perf_lr_baseline, colorize = T)
+plot(perf_lr_baseline, colorize=T, 
+     main = "ROC curve",
+     ylab = "Sensitivity",
+     xlab = "1-Specificity",
+     print.cutoffs.at=seq(0,1,0.3),
+     text.adj= c(-0.2,1.7))
+
+
+```
+
+AUC
+```{r}
+# Area Under Curve
+auc_lr_baseline <- as.numeric(performance(pred_lr_baseline, "auc")@y.values)
+auc_lr_baseline <-  round(auc_lr_baseline, 3)
+auc_lr_baseline
+```
+
+
+apply elastic net regularization in random search 1
+```{r}
+set.seed(1234)
+en <- train(target ~.,
+            training_set,
+            method = 'glmnet',
+            tuneLength = 20,
+            preProcess = c("center", "scale"),
+            trControl = custom)
+
+# Plot Results
+plot(en)
+print(en)
+plot(en$finalModel, xvar = 'lambda', label=T)
+plot(en$finalModel, xvar = 'dev', label=T)
+plot(varImp(en))
+len=en$finalModel # Final model which can be used for prediction
+
+```
+
+get best result 1
+```{r}
+get_best_result = function(caret_fit) {
+  best = which(rownames(caret_fit$results) == rownames(caret_fit$bestTune))
+  best_result = caret_fit$results[best, ]
+  rownames(best_result) = NULL
+  best_result
+}
+
+get_best_result(en)
+```
+
+best model
+```{r}
+en$bestTune
+best <- en$finalModel
+coef(best, s = en$bestTune$lambda)
+
+
+saveRDS(en, "final_model.rds")
+fm <- readRDS("final_model.rds")
+print(fm)
+```
+
+accuracy in training set elastic net 
+```{r}
+predict_lr_training_tune = predict(en, training_set, type = "prob")
+
+pred_lr_train_tune <- as.numeric(predict_lr_training_tune[,2] > 0.5)
+
+cbind(predict_lr_training_tune, pred_lr_train_tune)
+
+confusionMatrix(factor(pred_lr_train_tune), factor(training_set$target),mode="everything")
+
+#pred_class_train_tune = ifelse(p1_lr_tune > 0.5, 1, 0)
+#cbind(p1_lr_tune, pred_class_train_tune)
+#cm_train_lr_tune = table(training_set$target, pred_class_train_tune)
+#cm_train_lr_tune
+
+#p1_training = table(training_set$target, p1)
+#p1_training
+
+#accuracy_training_en <- sum(diag(p1_training))/sum(p1_training)
+#accuracy_training_en
+
+
+```
+
+accuracy in test set elastic net 
+```{r}
+p1_t <- predict(en, test_set, type = "prob")
+p1_t_class <- as.numeric(p1_t[,2] > 0.5)
+
+
+confusionMatrix(factor(p1_t_class), factor(test_set$target),mode="everything")
+#p1
+#p1_training
+
+```
+
+Draw ROC LR tuned
+```{r}
+pred_lr <-  prediction(p1_t[,2], test_set$target)
+perf_lr <- performance(pred_lr, "tpr", "fpr")
+pred_lr
+perf_lr
+plot(perf_lr, colorize = T)
+plot(perf_lr, colorize=T, 
+     main = "ROC curve",
+     ylab = "Sensitivity",
+     xlab = "1-Specificity",
+     print.cutoffs.at=seq(0,1,0.3),
+     text.adj= c(-0.2,1.7))
+```
+
+
+Draw AUC LR tuned
+```{r}
+auc_lr_tune <- as.numeric(performance(pred_lr, "auc")@y.values)
+auc_lr_tune <-  round(auc_lr_tune, 3)
+auc_lr_tune
+```
+
+/------------------------------------------------------------/
+
+
+Random Forest
+/------------------------------------------------------------/
+
+apply model in Random Forest
+baseline
+```{r}
+library(randomForest)
+rf <- randomForest(target~.,data = training_set )
+print(rf)
+attributes(rf)
+rf$ntree
+rf$importance
+p1_rf <- predict(rf, training_set)
+confusionMatrix(p1_rf,training_set$target, mode= "everything")
+
+```
+
+accuracy for test set
+```{r}
+confusionMatrix(predict(rf,test_set),test_set$target, mode="everything")
+
+```
+
+plot rf
+```{r}
+plot(rf)
+```
+
+ROC
+```{r}
+pred_rf_roc <- predict(rf,test_set[-28],type ="prob")
+pred_rf <-  prediction(pred_rf_roc[,2], test_set$target)
+perf_rf <- performance(pred_rf, "tpr", "fpr")
+pred_rf_roc
+perf_rf
+plot(perf_rf, colorize = T)
+plot(perf_rf, colorize=T, 
+     main = "ROC curve",
+     ylab = "Sensitivity",
+     xlab = "1-Specificity",
+     print.cutoffs.at=seq(0,1,0.3),
+     text.adj= c(-0.2,1.7))
+```
+
+AUC
+```{r}
+auc_rf <- as.numeric(performance(pred_rf, "auc")@y.values)
+auc_rf <-  round(auc_rf, 3)
+auc_rf
+```
+
+
+apply grid search
+```{r}
+control <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid")
+set.seed(7)
+metric <- "Accuracy"
+tunegrid <- expand.grid(.mtry=c(1:15))
+rf_gridsearch <- train(target ~ ., data=training_set, method="rf", metric=metric, tuneGrid=tunegrid, trControl=control)
+print(rf_gridsearch)
+plot(rf_gridsearch)
+```
+
+training set confusionmatrix tuned
+```{r}
+tunerf_predict_train <- predict(rf_gridsearch,training_set)
+cm_train_rf_tune <- table(tunerf_predict_train, training_set$target)
+train_accuracy = sum(diag(cm_train_rf_tune)/sum(cm_train_rf_tune))
+confusionMatrix(tunerf_predict_train, training_set$target, mode="everything")
+```
+
+
+test set confusion matrix tuned
+```{r}
+#rf_hp_test <- predict(rf_gridsearch,test_set$target)
+tunerf_predict <- predict(rf_gridsearch,test_set)
+cm_test_rf_tune <- table(tunerf_predict, test_set$target)
+confusionMatrix(tunerf_predict, test_set$target, mode = "everything")
+```
+
+```{r}
+var_imp <- varImp(rf_gridsearch, scale = FALSE)
+print(var_imp)
+plot(var_imp)
+```
+
+
+Draw ROC rf tuned
+```{r}
+pred_rf_roc_tune <- predict(rf_gridsearch,test_set[-28],type ="prob")
+pred_rf_tune <-  prediction(pred_rf_roc_tune[,2], test_set$target)
+perf_rf_tune <- performance(pred_rf_tune, "tpr", "fpr")
+plot(perf_rf_tune, colorize = T)
+plot(perf_rf_tune, colorize=T, 
+     main = "ROC curve",
+     ylab = "Sensitivity",
+     xlab = "1-Specificity",
+     print.cutoffs.at=seq(0,1,0.3),
+     text.adj= c(-0.2,1.7))
+```
+
+Draw AUC rf tuned
+```{r}
+auc_rf_tune <- as.numeric(performance(pred_rf_tune, "auc")@y.values)
+auc_rf_tune <-  round(auc_rf_tune, 3)
+auc_rf_tune
+```
+
+/--------------------------end of random forest -----------------------------/
+
+/------------------------------ XGBoost ------------------------------------/
+
+xgboost
+baseline
+```{r}
+set.seed(100)
+
+
+xgb_model_base <- train(target ~., data=training_set, method="xgbTree", metric="Accuracy", verbosity = 0)
+
+```
+
+```{r}
+print(xgb_model_base)
+```
+
+
+predict on train
+```{r}
+predictTrain_base = predict(xgb_model_base, newdata = training_set[,-28], type = "prob")
+
+pred_xbg_train_base = ifelse(predictTrain_base > 0.5, 1, 0)
+pred_xbg_train_base <- as.data.frame(pred_xbg_train_base)
+xgb_train_base = table(training_set$target, pred_xbg_train_base$'1')
+
+#xgb_test <- table(predictTest, test_set$target)
+confusionMatrix(xgb_train_base,mode="everything")
+```
+
+predict on test
+```{r}
+predictTest_base = predict(xgb_model_base, newdata = test_set[,-28], type = "prob")
+
+pred_xbg_test_base = ifelse(predictTest_base > 0.5, 1, 0)
+pred_xbg_test_base <- as.data.frame(pred_xbg_test_base)
+xgb_test_base = table(test_set$target, pred_xbg_test_base$'1')
+
+#xgb_test <- table(predictTest, test_set$target)
+confusionMatrix(xgb_test_base,mode="everything")
+```
+
+ROC
+```{r}
+pred_xgb_base <-  prediction(pred_xbg_test_base$'1', test_set$target)
+perf_xgb_base <- performance(pred_xgb_base, "tpr", "fpr")
+plot(perf_xgb_base, colorize = T)
+plot(perf_xgb_base, colorize=T, 
+     main = "ROC curve",
+     ylab = "Sensitivity",
+     xlab = "1-Specificity",
+     print.cutoffs.at=seq(0,1,0.3),
+     text.adj= c(-0.2,1.7))
+```
+
+AUC
+```{r}
+auc_xgb_base <- as.numeric(performance(pred_xgb_base, "auc")@y.values)
+auc_xgb_base <-  round(auc_xgb_base, 3)
+auc_xgb_base
+```
+
+hyperparameter tuning
+```{r}
+xgb_grid <- expand.grid(nrounds = 1000,
+                        eta = c(0.01,0.05,0.1),
+                        max_depth = c(2,4,6,8,10,14),
+                        gamma = 1
+)
+
+
+set.seed(100)
+xgb_tuning <-train(target ~., data=training_set, method="xgbTree",  metric="Accuracy", trControl=control, tunegrid = xgb_grid, verbosity = 0)
+```
+
+predict on train tuned
+```{r}
+predictTrain_tune = predict(xgb_tuning, newdata = training_set[,-28], type = "prob")
+
+pred_xbg_train_tune = ifelse(predictTrain_tune > 0.5, 1, 0)
+pred_xbg_train_tune <- as.data.frame(pred_xbg_train_tune)
+xgb_train_tune = table(training_set$target, pred_xbg_train_tune$'1')
+xgb_train_tune
+
+#xgb_test <- table(predictTest, test_set$target)
+confusionMatrix(xgb_train_tune,mode="everything")
+```
+
+predict on test tuned
+```{r}
+predictTest_tune = predict(xgb_tuning, newdata = test_set[,-28], type = "prob")
+
+pred_xbg_test_tune = ifelse(predictTest_tune > 0.5, 1, 0)
+pred_xbg_test_tune <- as.data.frame(pred_xbg_test_tune)
+xgb_test_tune = table(test_set$target, pred_xbg_test_tune$'1')
+xgb_test_tune
+
+#xgb_test <- table(predictTest, test_set$target)
+confusionMatrix(xgb_test_tune,mode="everything")
+```
+
+ROC tuned
+```{r}
+pred_xgb_tune <-  prediction(pred_xbg_test_tune$'1', test_set$target)
+perf_xgb_tune <- performance(pred_xgb_tune, "tpr", "fpr")
+pred_xgb_tune
+perf_xgb_tune
+plot(perf_xgb_tune, colorize = T)
+plot(perf_xgb_tune, colorize=T, 
+     main = "ROC curve",
+     ylab = "Sensitivity",
+     xlab = "1-Specificity",
+     print.cutoffs.at=seq(0,1,0.3),
+     text.adj= c(-0.2,1.7))
+```
+
+AUC tuned
+```{r}
+auc_xgb_tune <- as.numeric(performance(pred_xgb_tune, "auc")@y.values)
+auc_rf_tune <-  round(auc_rf, 3)
+auc_rf_tune
+```
+
+/---------------------------------- end of XGBoost -----------------------/
